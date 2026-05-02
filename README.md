@@ -1,10 +1,10 @@
 # Generalized Toffoli Gate Simulation Code and Data
 
-This repository contains the numerical simulation code and data used for the paper:
+This repository contains numerical simulation code and data for the paper:
 
 **Generalized Toffoli Gates with Customizable Single-Step Multiple-Qubit Control**
 
-The code simulates generalized Toffoli gates based on Ising-type interactions, including single-step Hamming-control gates, multiple-designated-configuration gates, sequential circuit implementations, decoherence effects, and control-error effects.
+The code studies generalized Toffoli gates based on Ising-type interactions, including single-step Hamming-control gates, multiple-designated-configuration gates, sequential circuit baselines, decoherence effects, and control-error effects.
 
 ## Repository Contents
 
@@ -12,6 +12,7 @@ The code simulates generalized Toffoli gates based on Ising-type interactions, i
 .
 ├── Data.xlsx
 ├── README.md
+├── BuildingHammingCircuit.py
 ├── SimulationOfToffoli.py
 ├── SimulationOfCircuitByHammingToffoli.py
 ├── SimulationOfHammingCircuitsBy2Toffoli.py
@@ -41,7 +42,7 @@ It supports both decoherence-free and decoherence-included simulations.
 
 ### `SimulationOfCircuitByHammingToffoli.py`
 
-Simulates the sequential implementation of a multiple-designated-configuration gate using several Hamming-control Toffoli gates.
+Simulates a sequential implementation of a multiple-designated-configuration gate using several Hamming-control Toffoli gates.
 
 This is used as a baseline for comparison with the proposed simultaneous multi-frequency single-step implementation.
 
@@ -49,7 +50,7 @@ This is used as a baseline for comparison with the proposed simultaneous multi-f
 
 Simulates a multi-step circuit implementation of a Hamming-control Toffoli gate using ordinary two-control-qubit Toffoli gates.
 
-This corresponds to the baseline circuit comparison for Hamming-control gates.
+This corresponds to the baseline dynamical simulation for the Hamming-control comparison. In this simulation, X gates are treated as ideal gates, and decoherence is modeled during the two-control-qubit Toffoli evolutions.
 
 ### `SimulationOfToffoliControlError.py`
 
@@ -69,11 +70,19 @@ Simulates the sequential circuit implementation under the same type of control-e
 
 This allows comparison between the proposed simultaneous-driving implementation and the sequential multi-step implementation.
 
+### `BuildingHammingCircuit.py`
+
+Builds a Qiskit-based reference decomposition of a Hamming-weight-two oracle on four control qubits.
+
+The generated oracle flips the target qubit if and only if the Hamming weight of the four control qubits is equal to two. The script enumerates the six weight-two control patterns, uses X gates to convert open controls into closed controls, applies Qiskit's multi-controlled-X decomposition, searches over supported MCX modes and transpiler seeds, prints gate counts, and exports the best circuit to QASM.
+
+This script is a Qiskit decomposition helper for checking alternative circuit-synthesis baselines. It is not the QuTiP dynamical simulation script for the average-fidelity plots.
+
 ## Requirements
 
-The code is written in Python and uses QuTiP for quantum dynamics simulation.
+The simulation scripts are written in Python and use QuTiP for quantum dynamics simulation.
 
-Required Python packages:
+Required packages for the QuTiP simulations:
 
 ```bash
 pip install numpy qutip
@@ -85,11 +94,17 @@ Optional packages for inspecting or processing the data file:
 pip install pandas openpyxl
 ```
 
+`BuildingHammingCircuit.py` additionally requires Qiskit:
+
+```bash
+pip install qiskit
+```
+
 The scripts use Python multiprocessing. On shared servers, it is recommended to limit the number of workers or run with fewer CPU cores to avoid overloading the machine.
 
 ## Basic Usage
 
-Each script is self-contained. Before running a simulation, edit the parameters near the top of the corresponding file.
+Each simulation script is self-contained. Before running a simulation, edit the parameters near the top of the corresponding file.
 
 Typical parameters include:
 
@@ -117,9 +132,27 @@ python3 SimulationOfToffoliControlError.py
 python3 SimulationOfCircuitControlError.py
 ```
 
+For the Qiskit Hamming-weight-two oracle decomposition:
+
+```bash
+python3 BuildingHammingCircuit.py
+```
+
+To use two ancilla qubits, matching the common paper-level comparison setting:
+
+```bash
+python3 BuildingHammingCircuit.py --anc 2 --seeds 0,1,2 --opt 3
+```
+
+To force CCX gates to be decomposed away:
+
+```bash
+python3 BuildingHammingCircuit.py --no-ccx --anc 2 --seeds 0,1,2 --opt 3
+```
+
 ## Physical Platforms
 
-The scripts currently support two parameter sets.
+The QuTiP simulation scripts currently support two parameter sets.
 
 ### Superconducting circuit
 
@@ -138,6 +171,8 @@ J = 2 * np.pi * 2 * 10**3
 T1 = np.inf
 T2 = 50
 ```
+
+The variable name `plateform` is kept because it is used in the current scripts.
 
 ## Decoherence Model
 
@@ -200,27 +235,7 @@ sigma_Omaga_rel = 0.001
 sigma_omaga_rel = 0.001
 ```
 
-## Average Fidelity Calculation
 
-The scripts compute the average gate fidelity using an operator-basis formula.
-
-For a target unitary operation `U` and a simulated quantum channel `E`, the average fidelity is computed from the action of `E` on a complete operator basis.
-
-The reported average error is:
-
-```text
-epsilon_avg = 1 - F_avg
-```
-
-The ideal operation used in the simulations is the phase-sensitive generalized Toffoli operation generated by the Hamiltonian, typically a `-i` Toffoli-type operation on the designated configurations.
-
-## Notes
-
-1. The scripts are parameter-driven. To reproduce a specific plot, make sure the parameters at the top of the script match the desired case.
-2. The control-error scripts may take a long time because they perform many independent stochastic trials.
-3. The X gates in some baseline circuit simulations are treated as ideal gates. Decoherence is modeled during the generalized or two-control-qubit Toffoli gate evolutions.
-4. The current code is intended for numerical reproduction and verification of the paper results, not as a general-purpose quantum circuit simulator.
-5. The variable name `plateform` is kept because it is used in the current scripts.
 
 ## Citation
 
@@ -229,4 +244,3 @@ If you use this code or data, please cite the associated paper:
 ```text
 Generalized Toffoli Gates with Customizable Single-Step Multiple-Qubit Control
 ```
-
