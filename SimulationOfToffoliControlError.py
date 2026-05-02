@@ -17,8 +17,8 @@ enable_time_step_noise = True  # False recovers the nominal/no-control-error beh
 # The values in this list are physical resampling counts per gate, not ODE solver steps.
 # For a value N_resample, each control parameter is held constant on each interval
 # [t_k, t_{k+1}), with t_k = k*T/N_resample.
-# N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000]
-N_RESAMPLE_LIST = [10000]
+N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000, 10000]
+
 
 # Relative Gaussian control error for nonzero designed parameters.
 sigma_J_rel = 0.001       # nonzero target-control couplings J_ij
