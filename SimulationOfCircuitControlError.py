@@ -31,15 +31,14 @@ w=np.array([1, 1, 1, 1])  # small indx first (alternating one first)
 plateform="cir" #cir, ion
 deco="on" #on, off
 number_drive=2 #1, 2, 3
-n_range=9
-n_min=8
+n_range=33
+n_min=4
 dis_n=np.arange(n_min, n_range, 4)
 #dis_n=np.array([2, 4, 6, 8, 7, 13, np.e*7])
 # N_RESAMPLE is the physical number of independent parameter samples per single pulse.
 # It is NOT the ODE solver step count.  Numerical integration accuracy is controlled
 # separately by MAX_INTERNAL_STEPS, tolerances, and max_step below.
-# N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000]
-N_RESAMPLE_LIST = [10000]
+N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000, 10000]
 
 # Relative one-sigma Gaussian control error.
 # Each nonzero J_{ij}, each active drive amplitude Omega_l, and each active drive
