@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 from __future__ import annotations
 
@@ -13,7 +11,7 @@ from qiskit import QuantumCircuit, QuantumRegister, transpile
 try:
     from qiskit import AncillaRegister
 except Exception:
-    AncillaRegister = None  # type: ignore
+    AncillaRegister = None  
 
 
 def multi_qubit_cost(qc: QuantumCircuit, allow_ccx: bool) -> int:
@@ -33,7 +31,6 @@ def _need_clean_ancillas_for_mode(num_controls: int, mode: str) -> int:
     if mode in ("v-chain", "v-chain-dirty"):
         return max(0, num_controls - 2)
     if mode in ("noancilla", "recursion"):
-        # For <=4 controls, recursion is typically 0-ancilla; if not, Qiskit will error and we skip.
         return 0
     raise ValueError(f"Unknown mcx mode: {mode}")
 
@@ -71,7 +68,7 @@ def build_hw2_oracle_with_mcx_mode(
     else:
         anc_list = None
 
-    # HW=2 patterns: choose which 2 controls are 1; the rest are 0 (open-controls via X)
+
     for ones in combinations(range(n_ctrl), 2):
         zeros = [i for i in range(n_ctrl) if i not in ones]
 
@@ -89,9 +86,9 @@ def build_hw2_oracle_with_mcx_mode(
 def try_transpile(qc: QuantumCircuit, seed: int, opt_level: int, allow_ccx: bool) -> QuantumCircuit:
     """Transpile to the requested basis."""
     if allow_ccx:
-        basis = ["x", "cx", "ccx", "id"]
+        basis = ["u", "cx", "ccx", "id"]
     else:
-        basis = ["u", "cx", "id"]  # force CCX to be decomposed away
+        basis = ["u", "cx", "id"]  
 
     return transpile(
         qc,
@@ -104,7 +101,7 @@ def try_transpile(qc: QuantumCircuit, seed: int, opt_level: int, allow_ccx: bool
 def dump_qasm_best(qc: QuantumCircuit, out_base: str) -> str:
     """Export to QASM3 if available; else QASM2. Returns output filename."""
     try:
-        from qiskit import qasm3  # type: ignore
+        from qiskit import qasm3  
 
         out = out_base + ".qasm3"
         qasm3.dump(qc, out)
@@ -113,14 +110,14 @@ def dump_qasm_best(qc: QuantumCircuit, out_base: str) -> str:
         pass
 
     try:
-        from qiskit import qasm2  # type: ignore
+        from qiskit import qasm2 
 
         out = out_base + ".qasm"
         qasm2.dump(qc, out)
         return out
     except Exception:
         try:
-            from qiskit import qasm2  # type: ignore
+            from qiskit import qasm2  
 
             out = out_base + ".qasm"
             text = qasm2.dumps(qc)
@@ -168,7 +165,7 @@ def main():
     modes = ["noancilla", "recursion", "v-chain", "v-chain-dirty"]
     seeds = parse_seeds(args.seeds)
 
-    best: Optional[Tuple[int, str, int, QuantumCircuit]] = None  # (cost, mode, seed, circuit)
+    best: Optional[Tuple[int, str, int, QuantumCircuit]] = None  
 
     print("\nPer-try results:")
     if allow_ccx:
