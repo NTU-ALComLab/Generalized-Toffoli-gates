@@ -1,5 +1,4 @@
 import os
-# Avoid oversubscribing CPU threads inside each worker process (common with NumPy/BLAS).
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -8,41 +7,28 @@ import multiprocessing as mp
 import numpy as np
 import qutip as qt
 
-# -----------------------------
-# Reproducibility and noise model
-# -----------------------------
-SEED = 0
-enable_time_step_noise = True  # False recovers the nominal/no-control-error behavior.
 
-# The values in this list are physical resampling counts per gate, not ODE solver steps.
-# For a value N_resample, each control parameter is held constant on each interval
-# [t_k, t_{k+1}), with t_k = k*T/N_resample.
+SEED = 0
+enable_time_step_noise = True 
+
+
 N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000, 10000]
 
+sigma_J_rel = 0.001     
+sigma_Omaga_rel = 0.001  
+sigma_omaga_rel = 0.001  
 
-# Relative Gaussian control error for nonzero designed parameters.
-sigma_J_rel = 0.001       # nonzero target-control couplings J_ij
-sigma_Omaga_rel = 0.001   # each drive amplitude Omega_l
-sigma_omaga_rel = 0.001   # each drive angular frequency omega_l
-
-# Nominal omega0 is zero in this script. Relative noise around zero gives exactly zero.
-# Setting this True models residual/additive per-qubit detuning noise with std sigma_omaga0_rel*|J|.
-# Set False for a strict relative-error-only model.
 ADD_OMEGA0_DETUNING_NOISE_WHEN_ZERO = False
 sigma_omaga0_rel = 0.01
 
-# Designed-zero Jij terms are normally not included. Turning this on models spurious residual
-# control-control couplings, which is an additional hardware-error assumption beyond relative error.
 ADD_SPURIOUS_ZERO_COUPLING_NOISE = False
 sigma_zero_J_rel = 0.01
 
 N_TRIALS = 100
-N_WORKERS = None  # None uses all CPU cores for trial-level parallelism; set 1 for serial.
+N_WORKERS = None  
 MAX_TASKS_PER_CHILD = 20
 
-# -----------------------------
-# Solver settings
-# -----------------------------
+
 MAX_INTERNAL_STEPS = 200000
 SOLVER_ATOL = 1e-8
 SOLVER_RTOL = 1e-6
@@ -50,21 +36,19 @@ USE_MAX_STEP = True
 POINTS_PER_FAST_OSCILLATION = 20
 CHECK_OPERATOR_BASIS = False
 
-# -----------------------------
-# Gate / platform settings
-# -----------------------------
+
 N = 5  # total qubits: N-1 controls plus 1 target
 n1 = -2
 n2 = 2
 n3 = -2
-w = np.array([1, 1, 1, 1])  # weights of the N-1 controls; small index first
+w = np.array([1, 1, 1, 1]) 
 plateform = "cir"  # "cir" or "ion"
 deco = "on"        # "on" or "off"
 number_drive = 2   # 1, 2, or 3
 n_range = 9
 n_min = 8
 dis_n = np.arange(n_min, n_range, 4)
-# dis_n = np.array([2, 4, 6, 8, 7, 13, np.e*7])
+
 
 if N not in (3, 4, 5):
     raise ValueError("This script only defines prefactor_basis tables for N = 3, 4, or 5.")
@@ -73,9 +57,7 @@ if len(w) < N - 1:
 if number_drive not in (1, 2, 3):
     raise ValueError("number_drive must be 1, 2, or 3.")
 
-# -----------------------------
-# Platform parameters and independent T1/T2 decoherence
-# -----------------------------
+
 if plateform == "cir":
     J = 2 * np.pi * 40 * 10**6
     T1 = 30 * 10**(-6)
@@ -87,13 +69,9 @@ elif plateform == "ion":
 else:
     raise ValueError('plateform must be either "cir" or "ion".')
 
-# Normalize J exactly as in the original script.
+
 J = J / np.max(np.abs(w))
 
-# Independent per-qubit T1/T2 decoherence rates.
-# With the Lindblad dissipator D[L](rho) = L rho L^dag - 1/2 {L^dag L, rho},
-# the pure-dephasing term (gamma_phi/2) D[Z_i] is implemented by
-# collapse operator sqrt(gamma_phi/2) * Z_i.
 gamma_amp = 0.0 if np.isinf(T1) else 1.0 / T1
 gamma_phi = 1.0 / T2 - 0.5 * gamma_amp
 if gamma_phi < -1e-15:
@@ -114,9 +92,7 @@ solver_max_step = None
 if USE_MAX_STEP and omega_max > 0:
     solver_max_step = (2 * np.pi / omega_max) / POINTS_PER_FAST_OSCILLATION
 
-# -----------------------------
-# Operator builders
-# -----------------------------
+
 def basis_state(dim, label):
     """Computational basis state using the tensor ordering of the original script."""
     pstate = qt.basis(2, label % 2)
@@ -145,8 +121,7 @@ def two_qubit_zz_operator(q1, q2, n_qubits, weight=1.0):
     return out
 
 
-# Nonzero designed couplings: target qubit 0 coupled to each control qubit j=1..N-1.
-# The weight w[j-1] is included in the operator, so the noisy scalar below represents J(t).
+
 H_J_pairs = []
 J_pair_labels = []
 for j in range(1, N):
@@ -154,7 +129,7 @@ for j in range(1, N):
         H_J_pairs.append(two_qubit_zz_operator(0, j, N, weight=w[j - 1]))
         J_pair_labels.append((0, j, w[j - 1]))
 
-# Optional spurious designed-zero couplings among control qubits.
+
 H_J_zero_pairs = []
 J_zero_pair_labels = []
 if ADD_SPURIOUS_ZERO_COUPLING_NOISE:
@@ -170,7 +145,7 @@ H_E0 = sum(H_Z_list, 0)
 H_dx = single_qubit_operator(qt.sigmax(), 0, N)
 H_dy = single_qubit_operator(qt.sigmay(), 0, N)
 
-# Independent per-qubit collapse operators.
+
 sigma_minus_ops = [single_qubit_operator(qt.basis(2, 0) * qt.basis(2, 1).dag(), q, N) for q in range(N)]
 sigma_z_ops = H_Z_list
 c_ops = []
@@ -179,9 +154,9 @@ if rt_gamma_amp > 0:
 if rt_gamma_phase > 0:
     c_ops.extend([rt_gamma_phase * op for op in sigma_z_ops])
 
-#making unitary bases
 
-def basis_state(dim, label):    #2**3 deim
+
+def basis_state(dim, label):  
     state=0
 
     pstate=qt.basis(2, label%2)
@@ -260,8 +235,8 @@ prefactor_basis_5= np.array([
     ])      
 
 Ubases=np.empty((2**(2*N)), dtype=object)
-for i in range(2**N): #|0><i|
-    for j in range(2**N): #prefactor
+for i in range(2**N): 
+    for j in range(2**N): 
         if N==3:
             U=basis_state(N, 0)*basis_state(N, i).dag()*prefactor_basis_3[j, 0]
         elif N==4:
@@ -269,17 +244,16 @@ for i in range(2**N): #|0><i|
         elif N==5:
             U=basis_state(N, 0)*basis_state(N, i).dag()*prefactor_basis_5[j, 0]
 
-        for k in range(1, 2**N): # make each element
+        for k in range(1, 2**N):
             if N==3:
                 U=U+prefactor_basis_3[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()
             elif N==4:
                 U=U+prefactor_basis_4[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()   
             elif N==5:
                 U=U+prefactor_basis_5[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()      
-        Ubases[2**N*i+j]=U#/((U.dag()*U).tr())**0.5
+        Ubases[2**N*i+j]=U
 
-#######
-#Toffoli
+
 Toffoli=0
 if number_drive==1:
     for i in range(2**(N-1)):
@@ -482,9 +456,7 @@ def run_trials_for_point(N_resample, dis_n_value, trial_seeds, n_workers=None):
         return np.fromiter(pool.imap_unordered(trial_worker, tasks, chunksize=chunksize), dtype=float, count=len(tasks))
 
 
-# -----------------------------
-# Optional operator-basis sanity check
-# -----------------------------
+
 def check_operator_basis(Ubases, n_qubits, tol=1e-9):
     d = 2 ** n_qubits
     ident = qt.qeye([2] * n_qubits)
@@ -506,9 +478,7 @@ if CHECK_OPERATOR_BASIS:
     check_operator_basis(Ubases, N)
 
 
-# -----------------------------
-# Monte-Carlo sweep
-# -----------------------------
+
 seed_sequence = np.random.SeedSequence(SEED)
 all_trial_seeds = seed_sequence.generate_state(len(N_RESAMPLE_LIST) * len(dis_n) * N_TRIALS, dtype=np.uint32)
 seed_cursor = 0
