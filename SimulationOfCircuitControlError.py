@@ -1,5 +1,5 @@
 import os
-# Avoid oversubscribing CPU threads inside each worker process (common with NumPy/BLAS).
+
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -8,62 +8,44 @@ import numpy as np
 import qutip as qt
 import multiprocessing as mp
 
-# -----------------------------
-# Time-step parameter noise
-# -----------------------------
-# Noise is sampled in the *parent* process before forking the worker pool, so results are reproducible.
+
 SEED = 0
 rng = np.random.default_rng(SEED)
 
-enable_time_step_noise = True  # set False to recover the original (noise-free) behavior
+enable_time_step_noise = True  
 
-# Multiprocessing strategy:
-# The original version parallelized the operator-basis loop inside every Monte-Carlo trial,
-# which creates many process pools and is slow.  This version parallelizes over Monte-Carlo
-# trials instead.  Each worker builds one complete noisy sequential-pulse trajectory and
-# computes its average-fidelity summation serially.
 
 N=5  #num of qubits
 n1=2   #-4
 n2=-2
 n3=4
-w=np.array([1, 1, 1, 1])  # small indx first (alternating one first)
+w=np.array([1, 1, 1, 1]) 
 plateform="cir" #cir, ion
 deco="on" #on, off
 number_drive=2 #1, 2, 3
 n_range=33
 n_min=4
 dis_n=np.arange(n_min, n_range, 4)
-#dis_n=np.array([2, 4, 6, 8, 7, 13, np.e*7])
-# N_RESAMPLE is the physical number of independent parameter samples per single pulse.
-# It is NOT the ODE solver step count.  Numerical integration accuracy is controlled
-# separately by MAX_INTERNAL_STEPS, tolerances, and max_step below.
+
 N_RESAMPLE_LIST = [10, 20, 30, 40, 50, 60, 70, 80, 100, 1000, 10000]
 
-# Relative one-sigma Gaussian control error.
-# Each nonzero J_{ij}, each active drive amplitude Omega_l, and each active drive
-# frequency omega_l gets its own independent noise trajectory in each pulse.
 sigma_J_rel     = 0.001
 sigma_Omaga_rel = 0.001
 sigma_omaga_rel = 0.001
 
-# Optional additive residual detuning when the nominal omega0 is exactly zero.
-# Strict relative-noise model: leave this False, because relative noise on zero is zero.
-# Hardware residual-detuning model: set True to use std = sigma_omaga0_rel * |J|.
 ADD_OMEGA0_DETUNING_NOISE_WHEN_ZERO = False
 sigma_omaga0_rel = sigma_omaga_rel
 
-# Optional additive residual coupling for designed-zero J_{ij} terms, e.g. control-control
-# couplings that are nominally set to zero.  Strict relative-noise model: keep False.
+
 ADD_SPURIOUS_ZERO_COUPLING_NOISE = False
 sigma_zero_J_rel = sigma_J_rel
 
-N_TRIALS  = 100          # number of random trials per (N_RESAMPLE, dis_n) point
-N_WORKERS = None         # set to an int (e.g., 8) to cap CPU cores; None uses all cores
+N_TRIALS  = 100        
+N_WORKERS = None      
 POOL_CHUNKS_PER_WORKER = 2
 MAX_TASKS_PER_CHILD = 10
 
-# QuTiP solver settings.
+
 MAX_INTERNAL_STEPS = 200000
 SOLVER_ATOL = 1e-8
 SOLVER_RTOL = 1e-6
@@ -102,22 +84,17 @@ rt_gamma_amp = np.sqrt(gamma_amp)
 rt_gamma_phase = np.sqrt(gamma_phi/2.0)
 
 J = J/np.max(np.abs(w))
-omaga0=0#*np.e/2
-#omaga=(-2*n+(N-1))*J-omaga0
-omaga1=-n1*J-omaga0#(-2*n1+np.sum(np.abs(w)))*J-omaga0
-omaga2=-n2*J-omaga0#(-2*n2+np.sum(np.abs(w)))*J-omaga0
-omaga3=-n3*J-omaga0#(-2*n3+np.sum(np.abs(w)))*J-omaga0
+omaga0=0
+
+omaga1=-n1*J-omaga0
+omaga2=-n2*J-omaga0
+omaga3=-n3*J-omaga0
 
 if number_drive not in (1, 2, 3):
     raise ValueError("number_drive must be 1, 2, or 3.")
-# Coupling strength and external magnetic field   #(0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1110 1111)
 
+H_J_pairs = []  
 
-# Construct the Pauli matrices
-# Build pairwise ZZ coupling operators (matching your original tensor ordering).
-# We keep the same coupling topology as your original code: i is fixed to 0, and pairs are (0, j).
-H_J_pairs = []  # list of Qobj, one per coupled pair
-# Create the Hamiltonian
 for i in range(1):
     for j in range(i + 1, N):
         if i == 0:
@@ -131,7 +108,6 @@ for i in range(1):
                 pH = qt.tensor(qt.qeye(2), pH)
         H_J_pairs.append(pH)
 
-# For reference / backward-compatibility (not used in QobjEvo anymore):
 H_J = 0
 for _pH in H_J_pairs:
     H_J = H_J + _pH
@@ -151,18 +127,16 @@ def build_ZZ_pair(q1, q2, n_qubits):
     return out
 
 
-# Nominally-zero ZZ pairs. In the main model these are absent. They are used only
-# if ADD_SPURIOUS_ZERO_COUPLING_NOISE=True to model residual unwanted couplings.
 H_J_zero_pairs = []
 for a in range(N):
     for b in range(a + 1, N):
-        # The nominal nonzero couplings in this script are the target-control pairs (0, b).
+
         if a == 0:
             continue
         H_J_zero_pairs.append(build_ZZ_pair(a, b, N))
 
 H_E0=0
-H_Z_list=[]  # per-qubit Z operators (same tensor ordering as your original H_E0 build)
+H_Z_list=[] 
 for i in range(N):
     if i==0:
         pH=qt.sigmaz()
@@ -193,7 +167,7 @@ def osc_cos3(t, args):
 H_dy=qt.sigmay()
 for i in range(N-1):
     H_dy=qt.tensor(qt.qeye(2), H_dy)
-    #H_dy=qt.tensor(H_dy, qt.qeye(2))
+
 
 
 def osc_sin1(t, args):
@@ -223,8 +197,6 @@ def single_qubit_operator(op, target, n_qubits):
     return out
 
 
-# Independent per-qubit collapse operators. Do NOT sum these before passing to
-# qt.liouvillian; summing would implement collective damping/dephasing.
 sigma_minus_ops = [
     single_qubit_operator(qt.basis(2, 0)*qt.basis(2, 1).dag(), q, N)
     for q in range(N)
@@ -238,9 +210,9 @@ if rt_gamma_phase > 0:
     c_ops.extend([rt_gamma_phase * op for op in sigma_z_ops])
 
 
-#making unitary bases
 
-def basis_state(dim, label):    #2**3 deim
+
+def basis_state(dim, label):   
     state=0
 
     pstate=qt.basis(2, label%2)
@@ -328,14 +300,14 @@ for i in range(2**N): #|0><i|
         elif N==5:
             U=basis_state(N, 0)*basis_state(N, i).dag()*prefactor_basis_5[j, 0]
 
-        for k in range(1, 2**N): # make each element
+        for k in range(1, 2**N): 
             if N==3:
                 U=U+prefactor_basis_3[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()
             elif N==4:
                 U=U+prefactor_basis_4[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()   
             elif N==5:
                 U=U+prefactor_basis_5[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()      
-        Ubases[2**N*i+j]=U#/((U.dag()*U).tr())**0.5
+        Ubases[2**N*i+j]=U
 
 
 def check_operator_basis(Ubases, n_qubits, tol=1e-9):
@@ -512,7 +484,7 @@ def build_sequential_pulse_liouvillians(Omaga, T, n_resample, trial_seed):
 
     S_list = []
     for omega_nom in active_omegas:
-        # Independent static-Hamiltonian control errors for this pulse.
+
         J_nonzero_values = sample_relative_or_constant(
             rng_local, J, sigma_J_rel, size=(n_pairs, n_resample), noisy=enable_time_step_noise
         )
@@ -525,7 +497,7 @@ def build_sequential_pulse_liouvillians(Omaga, T, n_resample, trial_seed):
             terms.append([H_Z_list[q], make_piecewise_coeff(-omega0_q_values[q] / 2.0, boundaries)])
 
         for p in range(n_pairs):
-            # H_J_pairs[p] already contains the intended signed/weighted ZZ operator.
+
             terms.append([H_J_pairs[p], make_piecewise_coeff(J_nonzero_values[p] / 2.0, boundaries)])
 
         if ADD_SPURIOUS_ZERO_COUPLING_NOISE and enable_time_step_noise:
