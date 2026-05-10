@@ -1,5 +1,5 @@
 import os
-# Avoid oversubscribing CPU threads inside each worker process.
+
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -7,36 +7,27 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 import multiprocessing as mp
 import numpy as np
 import qutip as qt
-N=4  #num of qubits
+N=4  
 n1=-3
 n2=-1
 n3=1
-w=np.array([1, 1, 1])  # small indx first (alternating one first)
+w=np.array([1, 1, 1])  
 plateform="ion" #cir, ion
 deco="on" #on, off
 number_drive=3 #1, 2, 3
 n_range=33
 n_min=4
 dis_n=np.arange(n_min, n_range, 4)
-#dis_n=np.array([2, 4, 6, 8, 7, 13, np.e*7])
 
-# Solver/output settings.
-# We only use result.final_state, so the solver output grid contains only
-# the initial and final times. Numerical accuracy is controlled by the
-# adaptive ODE solver options below, not by a dense output tlist.
 N_OUTPUT_POINTS = 2
 MAX_INTERNAL_STEPS = 200000
 SOLVER_ATOL = 1e-8
 SOLVER_RTOL = 1e-6
 USE_MAX_STEP = True
 POINTS_PER_FAST_OSCILLATION = 20
-CHECK_OPERATOR_BASIS = False  # Set True to validate the average-fidelity operator basis before simulation.
+CHECK_OPERATOR_BASIS = False  
 
-# Multiprocessing settings.
-# N_WORKERS = None uses all available CPU cores. Set N_WORKERS = 1 to disable multiprocessing.
-# This implementation uses the "fork" start method when available, so large QuTiP
-# objects such as QobjEvo and Ubases are inherited by workers rather than pickled.
-# On systems without fork, it safely falls back to the serial loop.
+
 N_WORKERS = None
 POOL_CHUNKS_PER_WORKER = 4
 MAX_TASKS_PER_CHILD = 200
@@ -63,11 +54,7 @@ elif plateform=="ion":
 else:
     raise ValueError('plateform must be either "cir" or "ion".')
 
-# Independent per-qubit T1/T2 decoherence rates.
-# For a Pauli-Z collapse operator,
-#     (1/(2*T_phi)) D[Z](rho)
-# is implemented in QuTiP by the collapse operator
-#     sqrt(1/(2*T_phi)) * Z.
+
 gamma_amp = 0.0 if np.isinf(T1) else 1.0/T1
 gamma_phi = 1.0/T2 - 0.5*gamma_amp
 if gamma_phi < -1e-15:
@@ -81,16 +68,12 @@ rt_gamma_phase = np.sqrt(gamma_phi/2.0)
 
 
 J=J/np.max(np.abs(w))
-omaga0=0#*np.e/2
-#omaga=(-2*n+(N-1))*J-omaga0
-omaga1=-n1*J-omaga0#(-2*n1+np.sum(np.abs(w)))*J-omaga0
-omaga2=-n2*J-omaga0#(-2*n2+np.sum(np.abs(w)))*J-omaga0
-omaga3=-n3*J-omaga0#(-2*n3+np.sum(np.abs(w)))*J-omaga0
+omaga0=0
 
-# Determine a conservative maximum internal ODE step from the fastest
-# carrier frequency that is actually used. This is independent of the
-# output tlist and helps prevent solver failures when the output tlist
-# has only [0, T].
+omaga1=-n1*J-omaga0
+omaga2=-n2*J-omaga0
+omaga3=-n3*J-omaga0
+
 active_omagas = []
 if number_drive >= 1:
     active_omagas.append(abs(omaga1))
@@ -103,17 +86,12 @@ solver_max_step = None
 if USE_MAX_STEP and omega_max > 0:
     solver_max_step = (2*np.pi/omega_max) / POINTS_PER_FAST_OSCILLATION
 
-# Coupling strength and external magnetic field   #(0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1110 1111)
-
-#T1=1   #1   30*10**(-6)
-#T2=50     # 50  30*10**(-6)
-#rt_gamma_amp=0    #(1/T1)**0.5                  #  (2*np.pi*100*10**3)**0.5
-#rt_gamma_phase=(0.5*(1/T2))**0.5         #(abs(0.5*(1/T2-1/(2*T1))))**0.5                    #(1/T2)**0.5  #(2*np.pi*500*10**3)**0.5
 
 
-# Construct the Pauli matrices
+
+
 H_J=0
-# Create the Hamiltonian
+
 for i in range(1):
     for j in range(i + 1, N):
         if i==0:
@@ -148,7 +126,7 @@ for i in range(N):
 H_dx=qt.sigmax()
 for i in range(N-1):
     H_dx=qt.tensor(qt.qeye(2), H_dx)
-    #H_dx=qt.tensor(H_dx, qt.qeye(2))
+
 
 def osc_cos1(t, args):
     return np.cos(omaga1*t)
@@ -162,7 +140,7 @@ def osc_cos3(t, args):
 H_dy=qt.sigmay()
 for i in range(N-1):
     H_dy=qt.tensor(qt.qeye(2), H_dy)
-    #H_dy=qt.tensor(H_dy, qt.qeye(2))
+
 
 
 def osc_sin1(t, args):
@@ -193,9 +171,7 @@ def single_qubit_operator(op, target, n_qubits):
     return out
 
 
-# Independent per-qubit collapse operators.
-# DO NOT sum these operators before passing them to qt.liouvillian; summing them would
-# implement collective damping/dephasing instead of independent T1/T2 channels.
+
 sigma_minus_ops = [
     single_qubit_operator(qt.basis(2, 0)*qt.basis(2, 1).dag(), i, N)
     for i in range(N)
@@ -299,14 +275,14 @@ for i in range(2**N): #|0><i|
         elif N==5:
             U=basis_state(N, 0)*basis_state(N, i).dag()*prefactor_basis_5[j, 0]
 
-        for k in range(1, 2**N): # make each element
+        for k in range(1, 2**N): 
             if N==3:
                 U=U+prefactor_basis_3[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()
             elif N==4:
                 U=U+prefactor_basis_4[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()   
             elif N==5:
                 U=U+prefactor_basis_5[j][k]*basis_state(N, k)*basis_state(N, (k+i)%(2**N)).dag()      
-        Ubases[2**N*i+j]=U#/((U.dag()*U).tr())**0.5
+        Ubases[2**N*i+j]=U
 
 
 def check_operator_basis(Ubases, n_qubits, tol=1e-9):
@@ -532,12 +508,10 @@ for i in range(len(dis_n)):
     T = np.pi/(2*Omaga)
     times = np.linspace(0.0, T, N_OUTPUT_POINTS)
 
-    # Sequential baseline: one single-drive pulse for each active frequency.
-    # The total physical duration is number_drive * T.
     S_list = build_sequential_drive_evolutions(Omaga, times)
 
     n_terms = 2**(2*N)
     Fidelity = parallel_fidelity_sum(S_list, times, options, n_terms, N_WORKERS)
 
     print(str(((Fidelity+2**(2*N))/(2**(2*N)*(2**N+1))).real))
-    #print(str(J/Omaga)+" "+str(((Fidelity+2**(2*N))/(2**(2*N)*(2**N+1))).real))
+
