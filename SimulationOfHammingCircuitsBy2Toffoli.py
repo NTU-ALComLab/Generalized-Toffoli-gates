@@ -1,5 +1,5 @@
 import os
-# Avoid oversubscribing CPU threads inside each worker process.
+
 os.environ.setdefault("OMP_NUM_THREADS", "1")
 os.environ.setdefault("MKL_NUM_THREADS", "1")
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -7,12 +7,12 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 import multiprocessing as mp
 import numpy as np
 import qutip as qt
-#from tqdm import tqdm
+
 N_qi=5 #number of information qubits
 N=N_qi+2  #num of total qubits
 
 n=0
-w=np.array([1, 1, 1, 1])  # small indx first (alternating one first)
+w=np.array([1, 1, 1, 1])  
 plateform="cir"
 deco="off"
 
@@ -20,10 +20,7 @@ n_range=33
 n_min=4
 dis_n=np.arange(n_min, n_range, 4)
 
-# Solver/output settings.
-# We only use result.final_state, so the output grid contains only the
-# initial and final times. Numerical accuracy is controlled by the
-# adaptive ODE solver options below, not by a dense output tlist.
+
 N_OUTPUT_POINTS = 2
 MAX_INTERNAL_STEPS = 200000
 SOLVER_ATOL = 1e-8
@@ -31,10 +28,6 @@ SOLVER_RTOL = 1e-6
 USE_MAX_STEP = True
 POINTS_PER_FAST_OSCILLATION = 20
 
-# Multiprocessing settings.
-# N_WORKERS = None uses all available CPU cores. Set N_WORKERS = 1 for serial.
-# The parallel implementation uses fork when available so large QuTiP objects
-# are inherited by workers instead of being pickled repeatedly.
 N_WORKERS = None
 POOL_CHUNKS_PER_WORKER = 4
 MAX_TASKS_PER_CHILD = 200
@@ -70,20 +63,12 @@ gamma_phi = max(0.0, gamma_phi)
 rt_gamma_amp = np.sqrt(gamma_amp)
 rt_gamma_phase = np.sqrt(gamma_phi/2.0)
 
-#J=2*np.pi*40*10**6      #2*np.pi*2*10**3        2*np.pi*40*10**6
+
 J=J/np.max(np.abs(w))
-omaga0=0#*np.e/2
-#omaga=(-2*n+(N-1))*J-omaga0
-omaga=-2*J-omaga0#(-2*n+np.sum(w))*J-omaga0
-# Coupling strength and external magnetic field   #(0000 0001 0010 0011 0100 0101 0110 0111 1000 1001 1010 1011 1100 1101 1110 1111)
+omaga0=0
 
-#T1=30*10**(-6)   #1  30*10**(-6)
-#T2=30*10**(-6)      # 50  30*10**(-6)
-#rt_gamma_amp=(1/T1)**0.5                  #  (2*np.pi*100*10**3)**0.5
-#rt_gamma_phase=(abs(0.5*(1/T2-1/(2*T1))))**0.5                    #(1/T2)**0.5  #(2*np.pi*500*10**3)**0.5
+omaga=-2*J-omaga0
 
-
-# Construct the Pauli matrices
 
 
 def Build_H_J(c1, c2, target):
@@ -195,7 +180,7 @@ if rt_gamma_phase > 0:
     c_ops.extend([rt_gamma_phase * op for op in sigma_z_ops])
 
 
-#making unitary bases
+
 
 def basis_state(dim, label):    #2**3 deim
     state=0
@@ -306,13 +291,10 @@ for i in range(2**(N_qi-1)):
         else:
             total_w=total_w-w[j]
         temp_i=temp_i//2
-    if total_w==n:# 
+    if total_w==n:
         print(i)
         Toffoli=Toffoli+qt.tensor(basis_state(N_qi-1, i)*basis_state(N_qi-1, i).dag(), -1j*qt.sigmax())
     else:
-        #print(i)
-        #print(basis_state(N-1, i))
-        #print(basis_state(N-1, i)*basis_state(N-1, i).dag())
         Toffoli=Toffoli+qt.tensor(basis_state(N_qi-1, i)*basis_state(N_qi-1, i).dag(), qt.qeye(2))
 
 
@@ -402,12 +384,12 @@ def _apply_circuit_to_basis_index(j):
             * X_Gates_dag[X_Pos[k][1]] * X_Gates_dag[X_Pos[k][0]]
         )
 
-        # Compute the two ancilla predicates, flip the target, and uncompute.
+
         result = qt.mesolve(Toffoli_Gates[k], state, _gTimes, options=_gOptions)
         result = qt.mesolve(Toffoli_Gates[6], result.final_state, _gTimes, options=_gOptions)
         result = qt.mesolve(Toffoli_pi_Gates[k], result.final_state, _gTimes, options=_gOptions)
 
-        # Undo the ideal X gates.
+
         state = (
             X_Gates[X_Pos[k][0]] * X_Gates[X_Pos[k][1]]
             * result.final_state
@@ -453,8 +435,6 @@ def parallel_fidelity_sum(n_terms, times, options, n_workers=None):
         return sum(pool.imap_unordered(_apply_circuit_to_basis_index, range(n_terms), chunksize=chunksize))
 
 
-# The fastest drive frequency is |omaga| for this circuit.  max_step is a numerical
-# solver safeguard; it does not change the physical circuit.
 solver_max_step = None
 if USE_MAX_STEP and abs(omaga) > 0:
     solver_max_step = (2*np.pi/abs(omaga)) / POINTS_PER_FAST_OSCILLATION
